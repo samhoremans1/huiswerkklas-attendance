@@ -293,6 +293,17 @@ const App = () => {
 
   return (
     <div className="app-container">
+      {showInstallBtn && (
+        <div className="install-banner">
+          <div className="install-banner-text">
+            <Download size={16} />
+            <span>Installeer als app op dit apparaat</span>
+          </div>
+          <button className="primary-btn install-banner-btn" onClick={handleInstallClick}>
+            Installeren
+          </button>
+        </div>
+      )}
       <header>
         <div className="header-content">
           <div className="logo">
@@ -300,11 +311,6 @@ const App = () => {
             <h1>Huiswerkklas<span>Aanwezigheid</span></h1>
           </div>
           <div className="current-date">
-            {showInstallBtn && (
-              <button className="primary-btn install-btn" onClick={handleInstallClick} style={{ marginRight: '1rem', padding: '0.4rem 0.8rem', fontSize: '0.8rem' }}>
-                <Download size={14} /> Installeren
-              </button>
-            )}
             {new Date().toLocaleDateString('nl-NL', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
           </div>
         </div>
