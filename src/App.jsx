@@ -322,19 +322,19 @@ const App = () => {
             className={clsx("tab-btn", activeTab === 'students' && "active")}
             onClick={() => { setActiveTab('students'); setSearchTerm(''); }}
           >
-            <User size={18} /> Kinderen
+            <User size={18} /> <span>Kinderen</span>
           </button>
           <button 
             className={clsx("tab-btn", activeTab === 'staff' && "active")}
             onClick={() => { setActiveTab('staff'); setSearchTerm(''); }}
           >
-            <Briefcase size={18} /> Medewerkers
+            <Briefcase size={18} /> <span>Medewerkers</span>
           </button>
           <button 
             className={clsx("tab-btn", activeTab === 'history' && "active")}
             onClick={() => setActiveTab('history')}
           >
-            <Calendar size={18} /> Historiek
+            <Calendar size={18} /> <span>Historiek</span>
           </button>
         </div>
 
@@ -538,11 +538,11 @@ const HistoryView = ({ attendance, students, staff, handleExport, handleImport, 
         <h2>Aanwezigheidsgeschiedenis</h2>
         <div className="history-actions">
           <button className="text-btn word-btn" onClick={downloadWordReport}>
-            <FileText size={14} /> Word Rapport
+            <FileText size={14} /> <span>Word Rapport</span>
           </button>
-          <button className="text-btn" onClick={handleExport}><Download size={14} /> Export</button>
+          <button className="text-btn" onClick={handleExport}><Download size={14} /> <span>Export</span></button>
           <label className="text-btn">
-            <Upload size={14} /> Import
+            <Upload size={14} /> <span>Import</span>
             <input type="file" className="hidden-input" accept=".json" onChange={handleImport} />
           </label>
         </div>

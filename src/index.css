@@ -947,24 +947,24 @@ footer {
   }
 
   .tabs {
-    gap: 0.25rem;
+    gap: 0.5rem;
     padding: 0.35rem;
     margin-bottom: 1.5rem;
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-    scrollbar-width: none;
-  }
-
-  .tabs::-webkit-scrollbar {
-    display: none;
+    display: flex;
+    overflow: hidden;
   }
 
   .tab-btn {
-    padding: 0.6rem 0.6rem;
-    font-size: 0.85rem;
-    white-space: nowrap;
-    min-width: 100px;
-    flex: none;
+    padding: 0.8rem 0.5rem;
+    font-size: 1.2rem; /* Make icons slightly larger */
+    min-width: 0;
+    flex: 1;
+    display: flex;
+    justify-content: center;
+  }
+
+  .tab-btn span {
+    display: none; /* Hide text on phone to prevent scrolling */
   }
 
   .action-bar {
@@ -1086,14 +1086,10 @@ footer {
   }
 
   .history-actions {
-    overflow-x: auto;
+    display: flex;
+    flex-wrap: wrap; /* Wrap buttons underneath instead of scrolling */
+    gap: 0.5rem;
     width: 100%;
-    padding-bottom: 0.5rem;
-    scrollbar-width: none;
-  }
-
-  .history-actions::-webkit-scrollbar {
-    display: none;
   }
 
   .section-title {
@@ -1109,9 +1105,5 @@ footer {
     flex-direction: column;
     align-items: flex-start;
     gap: 0.8rem;
-  }
-
-  .tab-btn span {
-    display: none;
   }
 }
