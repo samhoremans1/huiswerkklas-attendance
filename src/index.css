@@ -358,6 +358,15 @@ h1 span {
   display: flex;
   align-items: center;
   gap: 1rem;
+  min-width: 0;
+  flex: 1;
+}
+
+.item-actions {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  gap: 0.25rem;
 }
 
 .avatar {

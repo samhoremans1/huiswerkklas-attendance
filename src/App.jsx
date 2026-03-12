@@ -383,13 +383,10 @@ const App = () => {
                         </div>
                         <div className="item-name">
                           <span className="full-name">{person.firstName} {person.lastName}</span>
-                          <span className="role">
-                            {activeTab === 'students' ? 'Kind' : 'Medewerker'}
-                            {person.extraInfo && <span className="item-badge">{person.extraInfo}</span>}
-                          </span>
+                          {person.extraInfo && <span className="role"><span className="item-badge">{person.extraInfo}</span></span>}
                         </div>
                       </div>
-                      <div style={{ display: 'flex', alignItems: 'center' }}>
+                      <div className="item-actions">
                         <div className="presence-toggle" />
                         <button 
                           className="edit-btn" 
