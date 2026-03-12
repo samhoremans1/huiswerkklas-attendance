@@ -312,9 +312,14 @@ h1 span {
 .section-title h2 {
   font-size: 1.1rem;
   font-weight: 700;
-  word-wrap: break-word;
-  overflow-wrap: break-word;
-  hyphens: auto;
+  word-break: break-word;
+  white-space: normal;
+  max-width: 100%;
+}
+
+.list-container {
+  max-width: 100%;
+  overflow-x: hidden;
 }
 
 .count {
