@@ -25,3 +25,8 @@ dist-ssr
 
 # Vite
 dev-dist
+
+# Environment variables
+.env
+.env.local
+.env.production

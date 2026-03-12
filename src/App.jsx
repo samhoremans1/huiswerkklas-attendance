@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { 
   GraduationCap, 
   User, 
@@ -17,6 +17,7 @@ import {
   Users
 } from 'lucide-react';
 import clsx from 'clsx';
+import { fetchDataFromGitHub, saveDataToGitHub, isGitHubSyncEnabled } from './github-sync';
 
 // Constants
 const STORAGE_KEYS = {
@@ -42,8 +43,54 @@ const App = () => {
   const [statsPerson, setStatsPerson] = useState(null); // { id, firstName, lastName, type }
   const [deferredPrompt, setDeferredPrompt] = useState(null);
   const [showInstallBtn, setShowInstallBtn] = useState(false);
+  const [syncStatus, setSyncStatus] = useState('idle'); // 'idle', 'syncing', 'synced', 'error'
+  const [dataLoaded, setDataLoaded] = useState(false);
+  const saveTimerRef = useRef(null);
 
   const today = useMemo(() => getTodayStr(), []);
+
+  // Load data from GitHub on mount
+  useEffect(() => {
+    async function loadFromGitHub() {
+      if (!isGitHubSyncEnabled()) {
+        setDataLoaded(true);
+        return;
+      }
+      setSyncStatus('syncing');
+      try {
+        const remote = await fetchDataFromGitHub();
+        if (remote) {
+          if (remote.students) setStudents(remote.students);
+          if (remote.staff) setStaff(remote.staff);
+          if (remote.attendance) setAttendance(remote.attendance);
+        }
+        setSyncStatus('synced');
+      } catch {
+        setSyncStatus('error');
+      }
+      setDataLoaded(true);
+    }
+    loadFromGitHub();
+  }, []);
+
+  // Debounced save to GitHub
+  const saveToGitHub = useCallback((studentsData, staffData, attendanceData) => {
+    if (!isGitHubSyncEnabled() || !dataLoaded) return;
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = setTimeout(async () => {
+      setSyncStatus('syncing');
+      try {
+        await saveDataToGitHub({
+          students: studentsData,
+          staff: staffData,
+          attendance: attendanceData,
+        });
+        setSyncStatus('synced');
+      } catch {
+        setSyncStatus('error');
+      }
+    }, 1500); // Wait 1.5s after last change before saving
+  }, [dataLoaded]);
 
   // PWA Install Logic
   useEffect(() => {
@@ -69,17 +116,20 @@ const App = () => {
     }
   };
 
-  // Sync to LocalStorage
+  // Sync to LocalStorage + GitHub
   useEffect(() => {
     localStorage.setItem(STORAGE_KEYS.STUDENTS, JSON.stringify(students));
+    saveToGitHub(students, staff, attendance);
   }, [students]);
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEYS.STAFF, JSON.stringify(staff));
+    saveToGitHub(students, staff, attendance);
   }, [staff]);
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEYS.ATTENDANCE, JSON.stringify(attendance));
+    saveToGitHub(students, staff, attendance);
   }, [attendance]);
 
   // Ensure today exists in attendance
@@ -311,6 +361,13 @@ const App = () => {
             <h1>Huiswerkklas<span>Aanwezigheid</span></h1>
           </div>
           <div className="current-date">
+            {isGitHubSyncEnabled() && (
+              <span className={clsx("sync-dot", syncStatus)} title={
+                syncStatus === 'syncing' ? 'Synchroniseren...' : 
+                syncStatus === 'synced' ? 'Gesynchroniseerd' : 
+                syncStatus === 'error' ? 'Sync mislukt' : ''
+              } />
+            )}
             {new Date().toLocaleDateString('nl-NL', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
           </div>
         </div>

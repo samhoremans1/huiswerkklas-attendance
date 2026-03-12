@@ -131,6 +131,36 @@ h1 span {
   font-weight: 600;
   color: hsl(var(--text-secondary));
   border: 1px solid hsl(var(--border));
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.sync-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: hsl(var(--border));
+  flex-shrink: 0;
+  transition: background 0.3s;
+}
+
+.sync-dot.syncing {
+  background: hsl(var(--primary));
+  animation: pulse 1s ease-in-out infinite;
+}
+
+.sync-dot.synced {
+  background: hsl(var(--success));
+}
+
+.sync-dot.error {
+  background: hsl(var(--error));
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
 }
 
 .tabs {
