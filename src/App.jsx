@@ -368,7 +368,7 @@ const App = () => {
                 syncStatus === 'error' ? 'Sync mislukt' : ''
               } />
             )}
-            {new Date().toLocaleDateString('nl-NL', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+            {new Date().toLocaleDateString('nl-NL', {day: 'numeric', month: 'long', year: 'numeric' })}
           </div>
         </div>
       </header>
