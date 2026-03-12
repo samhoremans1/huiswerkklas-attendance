@@ -43,6 +43,12 @@
       "firstName": "Sam",
       "lastName": "Horemans ",
       "extraInfo": "Coördinator "
+    },
+    {
+      "id": "1773334433568",
+      "firstName": "Alexia",
+      "lastName": "Cristina",
+      "extraInfo": "Stagiair"
     }
   ],
   "attendance": {
