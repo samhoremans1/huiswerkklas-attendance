@@ -1,0 +1,30 @@
+{
+  "students": [
+    {
+      "id": "1773303459989",
+      "firstName": "Jan",
+      "lastName": "De Vries",
+      "extraInfo": "3de Leerjaar"
+    },
+    {
+      "id": "1773333903209",
+      "firstName": "Test",
+      "lastName": "Persoon",
+      "extraInfo": ""
+    }
+  ],
+  "staff": [
+    {
+      "id": "1773303504177",
+      "firstName": "Sara",
+      "lastName": "Bakker",
+      "extraInfo": "Vrijwilliger"
+    }
+  ],
+  "attendance": {
+    "2026-03-12": [
+      "1773303459989",
+      "1773303504177"
+    ]
+  }
+}
