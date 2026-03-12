@@ -935,26 +935,26 @@ footer {
   }
 
   .header-content {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 0.8rem;
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.5rem;
   }
 
   h1 {
-    font-size: 1.3rem;
+    font-size: 1.2rem;
   }
 
   h1 span {
-    font-size: 0.8rem;
+    font-size: 0.75rem;
   }
 
   .current-date {
-    padding: 0.5rem 0.8rem;
-    font-size: 0.85rem;
-    width: 100%;
-    text-align: left;
-    background: hsla(var(--primary), 0.05); /* Make it distinct */
-    border: none;
+    padding: 0.3rem 0.6rem;
+    font-size: 0.75rem;
+    width: auto;
+    text-align: right;
+    background: none;
   }
 
   .tabs {
@@ -1115,9 +1115,12 @@ footer {
 
 /* Extra small devices */
 @media (max-width: 380px) {
-  .header-content {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 0.8rem;
+  h1 {
+    font-size: 1rem;
+  }
+  
+  .current-date {
+    padding: 0.2rem 0.4rem;
+    font-size: 0.7rem;
   }
 }
