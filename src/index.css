@@ -1105,8 +1105,10 @@ footer {
   }
 
   .section-title {
-    flex-direction: column;
-    align-items: flex-start;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
     gap: 0.8rem;
   }
 }
