@@ -40,8 +40,34 @@ const App = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState(null); // { id, firstName, lastName, extraInfo, type }
   const [statsPerson, setStatsPerson] = useState(null); // { id, firstName, lastName, type }
+  const [deferredPrompt, setDeferredPrompt] = useState(null);
+  const [showInstallBtn, setShowInstallBtn] = useState(false);
 
   const today = useMemo(() => getTodayStr(), []);
+
+  // PWA Install Logic
+  useEffect(() => {
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+      setShowInstallBtn(true);
+    });
+
+    window.addEventListener('appinstalled', () => {
+      setShowInstallBtn(false);
+      setDeferredPrompt(null);
+    });
+  }, []);
+
+  const handleInstallClick = async () => {
+    if (!deferredPrompt) return;
+    deferredPrompt.prompt();
+    const { outcome } = await deferredPrompt.userChoice;
+    if (outcome === 'accepted') {
+      setDeferredPrompt(null);
+      setShowInstallBtn(false);
+    }
+  };
 
   // Sync to LocalStorage
   useEffect(() => {
@@ -274,6 +300,11 @@ const App = () => {
             <h1>Huiswerkklas<span>Aanwezigheid</span></h1>
           </div>
           <div className="current-date">
+            {showInstallBtn && (
+              <button className="primary-btn install-btn" onClick={handleInstallClick} style={{ marginRight: '1rem', padding: '0.4rem 0.8rem', fontSize: '0.8rem' }}>
+                <Download size={14} /> Installeren
+              </button>
+            )}
             {new Date().toLocaleDateString('nl-NL', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
           </div>
         </div>
