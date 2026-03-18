@@ -35,6 +35,12 @@
       "firstName": "Saranda",
       "lastName": "Hoti",
       "extraInfo": "3de Leerjaar"
+    },
+    {
+      "id": "1773841469485",
+      "firstName": "Merve",
+      "lastName": "Haji",
+      "extraInfo": "3de Leerjaar"
     }
   ],
   "staff": [
@@ -93,7 +99,8 @@
       "1773303459989",
       "1773333903209",
       "1773334367945",
-      "1773841436668"
+      "1773841436668",
+      "1773841469485"
     ]
   }
 }
