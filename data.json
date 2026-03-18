@@ -53,6 +53,12 @@
       "firstName": "Amira",
       "lastName": "Jouet",
       "extraInfo": "3de Leerjaar"
+    },
+    {
+      "id": "1773841744547",
+      "firstName": "Donlha",
+      "lastName": "Tsering",
+      "extraInfo": "4de Leerjaar"
     }
   ],
   "staff": [
@@ -115,7 +121,8 @@
       "1773841469485",
       "1773841534107",
       "1773841586488",
-      "1773334391147"
+      "1773334391147",
+      "1773841744547"
     ]
   }
 }
