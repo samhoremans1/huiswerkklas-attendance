@@ -65,12 +65,6 @@
       "firstName": "Adam",
       "lastName": "Jouied mohli",
       "extraInfo": "4de Leerjaar"
-    },
-    {
-      "id": "1773842110990",
-      "firstName": "Aya",
-      "lastName": "Jouied mohli",
-      "extraInfo": "3de Leerjaar"
     }
   ],
   "staff": [
@@ -135,8 +129,7 @@
       "1773841586488",
       "1773334391147",
       "1773841744547",
-      "1773842087448",
-      "1773842110990"
+      "1773842087448"
     ]
   }
 }
