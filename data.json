@@ -47,6 +47,12 @@
       "firstName": "Aya",
       "lastName": "Jouied Mouhli",
       "extraInfo": "3de Leerjaar"
+    },
+    {
+      "id": "1773841586488",
+      "firstName": "Amira",
+      "lastName": "Jouet",
+      "extraInfo": "3de Leerjaar"
     }
   ],
   "staff": [
@@ -107,7 +113,8 @@
       "1773334367945",
       "1773841436668",
       "1773841469485",
-      "1773841534107"
+      "1773841534107",
+      "1773841586488"
     ]
   }
 }
