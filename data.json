@@ -163,6 +163,12 @@
       "firstName": "Kaat",
       "lastName": "Van Mierlo",
       "extraInfo": "Vrijwilliger"
+    },
+    {
+      "id": "1777468362583",
+      "firstName": "Eline",
+      "lastName": "Michiels",
+      "extraInfo": "Stagiair"
     }
   ],
   "attendance": {
@@ -260,7 +266,8 @@
       "1773334471050",
       "1776862449987",
       "1777466566314",
-      "1777468064496"
+      "1777468064496",
+      "1777468362583"
     ]
   }
 }
