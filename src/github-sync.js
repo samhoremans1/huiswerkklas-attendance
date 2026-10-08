@@ -1,5 +1,6 @@
 // GitHub Sync Module
 // Reads and writes app data (students, staff, attendance) to a JSON file in a GitHub repo.
+// Functions throw on network/API errors so the UI can show an accurate sync status.
 
 const TOKEN = import.meta.env.VITE_GITHUB_TOKEN;
 const REPO = import.meta.env.VITE_GITHUB_REPO;
@@ -14,89 +15,89 @@ const headers = () => ({
   'Content-Type': 'application/json',
 });
 
-/**
- * Fetch all data from GitHub.
- * Returns { students, staff, attendance } or null if no data exists yet.
- */
-export async function fetchDataFromGitHub() {
-  if (!TOKEN || !REPO) {
-    console.warn('GitHub sync not configured (missing VITE_GITHUB_TOKEN or VITE_GITHUB_REPO)');
-    return null;
+// UTF-8 safe base64 helpers (plain atob/btoa break names like "Zoë")
+const decodeBase64Utf8 = (b64) => {
+  const bin = atob(String(b64).replace(/\s/g, ''));
+  const bytes = Uint8Array.from(bin, (c) => c.charCodeAt(0));
+  return new TextDecoder().decode(bytes);
+};
+
+const encodeBase64Utf8 = (str) => {
+  const bytes = new TextEncoder().encode(str);
+  let bin = '';
+  for (let i = 0; i < bytes.length; i += 0x8000) {
+    bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
   }
-
-  try {
-    const res = await fetch(API_BASE, { headers: headers() });
-
-    if (res.status === 404) {
-      // File doesn't exist yet — that's fine, we'll create it on first save
-      currentSha = null;
-      return null;
-    }
-
-    if (!res.ok) {
-      console.error('GitHub fetch error:', res.status, await res.text());
-      return null;
-    }
-
-    const json = await res.json();
-    currentSha = json.sha; // Remember SHA for updates
-    const content = atob(json.content); // Decode base64
-    return JSON.parse(content);
-  } catch (err) {
-    console.error('GitHub sync fetch error:', err);
-    return null;
-  }
-}
-
-/**
- * Save all data to GitHub.
- * @param {{ students: Array, staff: Array, attendance: Object }} data
- */
-export async function saveDataToGitHub(data) {
-  if (!TOKEN || !REPO) return;
-
-  try {
-    const content = btoa(unescape(encodeURIComponent(JSON.stringify(data, null, 2)))); // Encode to base64 (supports Unicode)
-
-    const body = {
-      message: `Auto-sync: ${new Date().toLocaleString('nl-NL')}`,
-      content,
-    };
-
-    // If the file already exists, we need to provide the SHA
-    if (currentSha) {
-      body.sha = currentSha;
-    }
-
-    const res = await fetch(API_BASE, {
-      method: 'PUT',
-      headers: headers(),
-      body: JSON.stringify(body),
-    });
-
-    if (!res.ok) {
-      const errorText = await res.text();
-      // If SHA conflict (someone else updated), re-fetch and retry once
-      if (res.status === 409 || errorText.includes('sha')) {
-        console.warn('SHA conflict, re-fetching...');
-        await fetchDataFromGitHub(); // This updates currentSha
-        return saveDataToGitHub(data); // Retry with new SHA
-      }
-      console.error('GitHub save error:', res.status, errorText);
-      return;
-    }
-
-    const json = await res.json();
-    currentSha = json.content.sha; // Update SHA for next save
-    console.log('✅ Data synced to GitHub');
-  } catch (err) {
-    console.error('GitHub sync save error:', err);
-  }
-}
+  return btoa(bin);
+};
 
 /**
  * Check if GitHub sync is configured.
  */
 export function isGitHubSyncEnabled() {
   return !!(TOKEN && REPO);
+}
+
+/**
+ * Fetch all data from GitHub.
+ * Returns { students, staff, attendance } or null if no data exists yet.
+ * Throws on network / API errors.
+ */
+export async function fetchDataFromGitHub() {
+  if (!isGitHubSyncEnabled()) return null;
+
+  const res = await fetch(API_BASE, { headers: headers(), cache: 'no-store' });
+
+  if (res.status === 404) {
+    // File doesn't exist yet — that's fine, we'll create it on first save
+    currentSha = null;
+    return null;
+  }
+
+  if (!res.ok) {
+    throw new Error(`GitHub fetch error ${res.status}: ${await res.text()}`);
+  }
+
+  const json = await res.json();
+  currentSha = json.sha; // Remember SHA for updates
+  return JSON.parse(decodeBase64Utf8(json.content));
+}
+
+/**
+ * Save all data to GitHub.
+ * @param {{ students: Array, staff: Array, attendance: Object }} data
+ * @param {{ keepalive?: boolean, retry?: boolean }} [options]
+ */
+export async function saveDataToGitHub(data, { keepalive = false, retry = true } = {}) {
+  if (!isGitHubSyncEnabled()) return;
+
+  const body = {
+    message: `Auto-sync: ${new Date().toLocaleString('nl-BE')}`,
+    content: encodeBase64Utf8(JSON.stringify(data, null, 2)),
+  };
+
+  // If the file already exists, we need to provide the SHA
+  if (currentSha) body.sha = currentSha;
+
+  const payload = JSON.stringify(body);
+  const res = await fetch(API_BASE, {
+    method: 'PUT',
+    headers: headers(),
+    body: payload,
+    // keepalive lets the request finish when the app is closed (limited to ~64KB)
+    keepalive: keepalive && payload.length < 60000,
+  });
+
+  if (!res.ok) {
+    const errorText = await res.text();
+    // SHA conflict (file changed elsewhere / unknown sha): refresh SHA and retry once
+    if (retry && (res.status === 409 || res.status === 422)) {
+      await fetchDataFromGitHub().catch(() => {});
+      return saveDataToGitHub(data, { keepalive, retry: false });
+    }
+    throw new Error(`GitHub save error ${res.status}: ${errorText}`);
+  }
+
+  const json = await res.json();
+  currentSha = json.content.sha; // Update SHA for next save
 }

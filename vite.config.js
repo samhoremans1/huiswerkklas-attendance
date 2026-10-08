@@ -10,18 +10,44 @@ export default defineConfig({
       devOptions: {
         enabled: true
       },
-      includeAssets: ['icon-512.png', 'favicon.ico', 'robots.txt', 'apple-touch-icon.png'],
+      includeAssets: ['icon-512.png'],
+      workbox: {
+        // Cache Google Fonts so the app looks right offline
+        runtimeCaching: [
+          {
+            urlPattern: /^https:\/\/fonts\.(googleapis|gstatic)\.com\/.*/i,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'google-fonts',
+              expiration: { maxEntries: 20, maxAgeSeconds: 60 * 60 * 24 * 365 },
+              cacheableResponse: { statuses: [0, 200] }
+            }
+          }
+        ]
+      },
       manifest: {
         name: 'Huiswerkklas Aanwezigheid',
         short_name: 'Aanwezigheid',
         description: 'Aanwezigheidsregistratie voor de huiswerkklas',
-        theme_color: '#3b82f6',
+        lang: 'nl',
+        theme_color: '#07070d',
+        background_color: '#07070d',
+        display: 'standalone',
+        orientation: 'portrait',
+        start_url: '/',
+        scope: '/',
         icons: [
           {
             src: 'icon-512.png',
             sizes: '512x512',
             type: 'image/png',
-            purpose: 'any maskable'
+            purpose: 'any'
+          },
+          {
+            src: 'icon-512.png',
+            sizes: '512x512',
+            type: 'image/png',
+            purpose: 'maskable'
           }
         ]
       }
