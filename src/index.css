@@ -2037,6 +2037,286 @@ button.row:active {
   padding: 8px 0;
 }
 
+/* ---------- School levels (lager / middelbaar) ---------- */
+:root {
+  --grad-pink: linear-gradient(135deg, #f9a8d4 0%, #ec4899 50%, #db2777 100%);
+  --glow-pink: 0 10px 28px -8px rgba(236, 72, 153, 0.6);
+}
+
+.tag--middelbaar {
+  color: var(--pink);
+  background: var(--pink-soft);
+}
+
+.tag--archived {
+  color: var(--amber);
+  background: var(--amber-soft);
+}
+
+.name-tag--middelbaar {
+  border-left-color: #f472b6;
+}
+
+.row__icon--pink { --tone: var(--pink); --tone-soft: var(--pink-soft); }
+
+/* Compact segmented control (level switch in the form) */
+.field__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.segmented--sm {
+  padding: 3px;
+  border-radius: 12px;
+  min-width: 210px;
+}
+
+.segmented--sm .segmented__indicator {
+  top: 3px;
+  bottom: 3px;
+  left: 3px;
+  width: calc((100% - 6px) / var(--count));
+  border-radius: 9px;
+  transition: transform 0.4s var(--spring), background 0.3s, box-shadow 0.3s;
+}
+
+.segmented__indicator--pink {
+  background: var(--grad-pink);
+  box-shadow: var(--glow-pink);
+}
+
+.segmented--sm .segmented__btn {
+  height: 32px;
+  border-radius: 9px;
+  font-size: 0.8rem;
+}
+
+.class-grid {
+  animation: gridIn 0.35s var(--ease);
+}
+
+@keyframes gridIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
+
+.class-grid--middelbaar .class-chip.is-active {
+  background: var(--grad-pink);
+  box-shadow: var(--glow-pink);
+}
+
+.field__help {
+  font-size: 0.76rem;
+  color: var(--text-3);
+  line-height: 1.45;
+}
+
+/* Hero: lager / middelbaar split */
+.stat-row__hint {
+  margin-top: 6px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--text-3);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Level filter chips */
+.chip--level-middelbaar.is-active {
+  background: var(--pink-soft);
+  border-color: rgba(236, 72, 153, 0.5);
+}
+
+.chip--level-middelbaar.is-active .chip__count {
+  color: var(--pink);
+}
+
+/* ---------- Archive ---------- */
+.avatar--muted {
+  filter: grayscale(0.85);
+  opacity: 0.7;
+}
+
+.stat-note {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin-top: 10px;
+  font-size: 0.75rem;
+  color: var(--text-3);
+}
+
+.text-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  margin-top: 26px;
+  padding: 10px;
+  border-radius: var(--r-sm);
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--text-3);
+  transition: color 0.2s, background 0.2s;
+}
+
+.text-btn--danger:hover,
+.text-btn--danger:active {
+  color: var(--danger);
+  background: var(--danger-soft);
+}
+
+/* Lists in the school-year / archive sheets */
+.change-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.change-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 10px;
+  border-radius: var(--r-md);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  animation: itemIn 0.35s var(--ease) both;
+}
+
+.change-row--action {
+  padding: 4px 6px 4px 4px;
+}
+
+.change-row__main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 4px 6px;
+  border-radius: 12px;
+  text-align: left;
+}
+
+.change-row__text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.change-row__name {
+  font-weight: 700;
+  font-size: 0.9rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.change-row__classes {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  font-size: 0.75rem;
+}
+
+.change-row__arrow {
+  color: var(--text-3);
+}
+
+.change-row__restore {
+  color: var(--primary-text);
+}
+
+.archive-group:first-child {
+  margin-top: 4px;
+}
+
+.school-year .form-hint {
+  margin-bottom: 14px;
+}
+
+/* Toggle switch */
+.switch-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 10px;
+  padding: 12px 14px;
+  border-radius: var(--r-md);
+  background: var(--amber-soft);
+  cursor: pointer;
+}
+
+.switch-row__text {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.switch-row__text strong {
+  font-size: 0.88rem;
+}
+
+.switch-row__text span {
+  font-size: 0.76rem;
+  color: var(--text-2);
+}
+
+.switch {
+  appearance: none;
+  -webkit-appearance: none;
+  position: relative;
+  flex-shrink: 0;
+  width: 46px;
+  height: 28px;
+  border-radius: 99px;
+  background: var(--surface-2);
+  border: 1px solid var(--border-strong);
+  cursor: pointer;
+  transition: background 0.25s;
+}
+
+.switch::after {
+  content: '';
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+  transition: transform 0.3s var(--spring);
+}
+
+.switch:checked {
+  background: var(--grad-primary);
+  border-color: transparent;
+}
+
+.switch:checked::after {
+  transform: translateX(18px);
+}
+
+@media (hover: hover) {
+  .class-grid--middelbaar .class-chip:hover:not(.is-active) { border-color: rgba(236, 72, 153, 0.5); }
+  .change-row__main:hover { background: var(--surface-2); }
+}
+
+@media (max-width: 370px) {
+  .segmented--sm { min-width: 0; }
+  .field__head { flex-wrap: wrap; }
+}
+
 /* ---------- Hover (pointer devices only) ---------- */
 @media (hover: hover) {
   .icon-btn:hover:not(:disabled) { color: var(--text); background: var(--surface-2); border-color: var(--border-strong); }

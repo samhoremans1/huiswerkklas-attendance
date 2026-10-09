@@ -7,8 +7,9 @@ import TodayView from './components/TodayView';
 import HistoryView from './components/HistoryView';
 import SettingsView from './components/SettingsView';
 import { PersonFormSheet, PersonDetailSheet, ConfirmSheet } from './components/PersonSheets';
-import { buildDayReport, buildWordReport, downloadBlob, REPORT_RECIPIENT } from './lib/reports';
-import { fullName } from './lib/people';
+import { SchoolYearSheet, ArchiveSheet } from './components/ManageSheets';
+import { buildDayReport, buildWordReport, downloadBlob, reportRecipient } from './lib/reports';
+import { fullName, schoolYear } from './lib/people';
 
 const INSTALL_DISMISS_KEY = 'hwk_install_dismissed';
 
@@ -33,6 +34,9 @@ export default function App() {
     addPerson,
     updatePerson,
     deletePerson,
+    setArchived,
+    applySchoolYear,
+    updateSettings,
     replaceAll,
   } = useAppData();
   const [theme, setTheme, resolvedTheme] = useTheme();
@@ -48,6 +52,7 @@ export default function App() {
   const [form, setForm] = useState(null); // { key, mode, type, person? }
   const [detail, setDetail] = useState(null); // { id, type }
   const [confirm, setConfirm] = useState(null);
+  const [manage, setManage] = useState(null); // 'schoolYear' | 'archive' | null
 
   // Keep the last values while sheets animate out
   const formState = useLatest(form);
@@ -115,7 +120,7 @@ export default function App() {
     const { person, type } = detailData;
     setConfirm({
       title: `${person.firstName} verwijderen?`,
-      message: `${fullName(person)} en alle bijhorende aanwezigheden worden verwijderd.`,
+      message: `${fullName(person)} en alle bijhorende aanwezigheden worden definitief verwijderd. Tip: met archiveren blijft de historiek bewaard.`,
       confirmLabel: 'Verwijderen',
       tone: 'danger',
       icon: <Trash2 size={26} />,
@@ -128,6 +133,36 @@ export default function App() {
     });
   };
 
+  const handleArchive = () => {
+    if (!detailData) return;
+    const { person, type } = detailData;
+    const snapshot = db;
+    setDetail(null);
+    setArchived(type, person.id, true);
+    withUndo(`${person.firstName} is gearchiveerd`, snapshot);
+  };
+
+  const handleRestore = (type, id) => {
+    const person = db[type].find((p) => p.id === id);
+    if (!person) return;
+    setArchived(type, id, false);
+    showToast(`${person.firstName} staat terug in de lijst`);
+  };
+
+  /* ---------------- school year ---------------- */
+  const handleSchoolYear = (changes, year) => {
+    const snapshot = db;
+    setManage(null);
+    applySchoolYear(changes, year);
+    haptic(20);
+    const archived = changes.filter((c) => c.archive).length;
+    const moved = changes.length - archived;
+    withUndo(
+      `${moved} ${moved === 1 ? 'kind' : 'kinderen'} een jaar hoger${archived ? `, ${archived} gearchiveerd` : ''}`,
+      snapshot,
+    );
+  };
+
   /* ---------------- reports ---------------- */
   const handleSendReport = async () => {
     const report = buildDayReport(db, dateKey);
@@ -138,7 +173,7 @@ export default function App() {
     await copyText(report.text);
     showToast('Lijst gekopieerd – je mailapp wordt geopend');
     setTimeout(() => {
-      window.location.href = `mailto:${REPORT_RECIPIENT}?subject=${encodeURIComponent(report.subject)}&body=${encodeURIComponent(report.text)}`;
+      window.location.href = `mailto:${reportRecipient(db)}?subject=${encodeURIComponent(report.subject)}&body=${encodeURIComponent(report.text)}`;
     }, 350);
   };
 
@@ -282,6 +317,13 @@ export default function App() {
               onWordReport={handleWordReport}
               install={install}
               onInstall={handleInstall}
+              currentSchoolYear={schoolYear(todayKey)}
+              onOpenSchoolYear={() => setManage('schoolYear')}
+              onOpenArchive={() => setManage('archive')}
+              onSaveRecipient={(value) => {
+                updateSettings({ reportRecipient: value });
+                showToast(value ? 'Ontvanger opgeslagen' : 'Standaardontvanger hersteld');
+              }}
             />
           )}
         </main>
@@ -305,11 +347,34 @@ export default function App() {
         todayKey={todayKey}
         onClose={() => setDetail(null)}
         onDelete={handleDelete}
+        onArchive={handleArchive}
+        onRestore={() => {
+          const { person, type } = detailData;
+          setDetail(null);
+          handleRestore(type, person.id);
+        }}
         onEdit={() => {
           const { person, type } = detailData;
           setDetail(null);
           setForm({ key: Date.now(), mode: 'edit', type, person });
         }}
+      />
+      <SchoolYearSheet
+        open={manage === 'schoolYear'}
+        db={db}
+        todayKey={todayKey}
+        onApply={handleSchoolYear}
+        onClose={() => setManage(null)}
+      />
+      <ArchiveSheet
+        open={manage === 'archive'}
+        db={db}
+        onRestore={handleRestore}
+        onOpenPerson={(id, type) => {
+          setManage(null);
+          setDetail({ id, type });
+        }}
+        onClose={() => setManage(null)}
       />
       <ConfirmSheet open={!!confirm} state={confirmState} onClose={() => setConfirm(null)} />
     </div>

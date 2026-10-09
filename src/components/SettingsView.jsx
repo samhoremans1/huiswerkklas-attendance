@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import clsx from 'clsx';
 import {
   FileText,
@@ -14,8 +14,12 @@ import {
   Share,
   CircleCheck,
   ChevronRight,
+  Mail,
+  GraduationCap,
+  Archive,
+  TriangleAlert,
 } from 'lucide-react';
-import { REPORT_PERIODS } from '../lib/reports';
+import { REPORT_PERIODS, REPORT_RECIPIENT, parseRecipients, isValidEmail } from '../lib/reports';
 import { formatTime } from '../lib/dates';
 
 function Row({ id, icon: Icon, tone = 'violet', title, subtitle, onClick, right, as = 'button', children }) {
@@ -41,6 +45,57 @@ const SYNC_TEXT = {
   error: 'Synchronisatie mislukt',
 };
 
+function RecipientCard({ value, onSave }) {
+  const [draft, setDraft] = useState(value);
+  useEffect(() => setDraft(value), [value]); // follow changes from other devices
+
+  const list = parseRecipients(draft);
+  const invalid = list.filter((x) => !isValidEmail(x));
+  const dirty = draft.trim() !== value;
+
+  const save = () => {
+    if (!dirty || invalid.length) return;
+    onSave(list.join(', '));
+  };
+
+  return (
+    <section className="card">
+      <p className="card__title">
+        <Mail size={16} /> Mailrapport
+      </p>
+      <div className="field">
+        <label htmlFor="recipientInput" className="field__label">
+          Ontvanger(s)
+        </label>
+        <input
+          id="recipientInput"
+          className="input"
+          type="text"
+          inputMode="email"
+          autoComplete="email"
+          autoCapitalize="off"
+          spellCheck={false}
+          placeholder={REPORT_RECIPIENT}
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onBlur={save}
+          onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
+          enterKeyHint="done"
+        />
+        {invalid.length > 0 ? (
+          <p className="form-hint">
+            <TriangleAlert size={15} /> Ongeldig adres: {invalid.join(', ')}
+          </p>
+        ) : (
+          <p className="field__help">
+            Meerdere adressen scheiden met een komma. Leeg laten = {REPORT_RECIPIENT}.
+          </p>
+        )}
+      </div>
+    </section>
+  );
+}
+
 export default function SettingsView({
   db,
   theme,
@@ -54,10 +109,18 @@ export default function SettingsView({
   onWordReport,
   install,
   onInstall,
+  onSaveRecipient,
+  onOpenSchoolYear,
+  onOpenArchive,
+  currentSchoolYear,
 }) {
   const [period, setPeriod] = useState('month');
   const fileRef = useRef(null);
   const sessions = Object.keys(db.attendance).length;
+  const activeKids = db.students.filter((p) => !p.archived).length;
+  const activeStaff = db.staff.filter((p) => !p.archived).length;
+  const archivedCount = db.students.length + db.staff.length - activeKids - activeStaff;
+  const lastYear = db.settings?.lastSchoolYear;
 
   return (
     <div className="view view--settings">
@@ -86,6 +149,32 @@ export default function SettingsView({
         <button id="downloadWordBtn" type="button" className="btn btn--primary btn--block" onClick={() => onWordReport(period)}>
           <Download size={18} /> Rapport downloaden
         </button>
+      </section>
+
+      <RecipientCard value={db.settings?.reportRecipient ?? ''} onSave={onSaveRecipient} />
+
+      <section className="card card--list">
+        <p className="card__title card__title--pad">Kinderen &amp; schooljaar</p>
+        <Row
+          id="schoolYearBtn"
+          icon={GraduationCap}
+          tone="pink"
+          title="Nieuw schooljaar"
+          subtitle={
+            lastYear === currentSchoolYear
+              ? `Al gedaan voor ${currentSchoolYear}`
+              : 'Iedereen één klas hoger zetten'
+          }
+          onClick={onOpenSchoolYear}
+        />
+        <Row
+          id="archiveBtn"
+          icon={Archive}
+          tone="amber"
+          title="Archief"
+          subtitle={archivedCount ? `${archivedCount} ${archivedCount === 1 ? 'persoon' : 'personen'} gearchiveerd` : 'Nog niemand gearchiveerd'}
+          onClick={onOpenArchive}
+        />
       </section>
 
       <section className="card card--list">
@@ -158,9 +247,9 @@ export default function SettingsView({
       </section>
 
       <p className="footnote">
-        {db.students.length} kinderen · {db.staff.length} medewerkers · {sessions} sessies
+        {activeKids} kinderen · {activeStaff} medewerkers · {sessions} sessies
         <br />
-        Huiswerkklas Aanwezigheid · v2.0
+        Huiswerkklas Aanwezigheid · v2.1
       </p>
     </div>
   );

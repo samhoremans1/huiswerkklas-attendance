@@ -16,15 +16,22 @@ import {
   UserPlus,
   SearchX,
   Download,
+  Archive,
 } from 'lucide-react';
-import { Avatar, ProgressRing, EmptyState } from './ui';
+import { Avatar, ProgressRing, EmptyState, ClassTag } from './ui';
 import { fmt, addDays, relativeDay, capitalize } from '../lib/dates';
-import { byName, normalizeSearch, TYPE_LABEL } from '../lib/people';
+import { byName, normalizeSearch, levelOf, TYPE_LABEL } from '../lib/people';
 
 const FILTERS = [
   { id: 'all', label: 'Alle' },
   { id: 'present', label: 'Aanwezig' },
   { id: 'absent', label: 'Afwezig' },
+];
+
+const LEVEL_FILTERS = [
+  { id: 'all', label: 'Alle niveaus' },
+  { id: 'lager', label: 'Lager' },
+  { id: 'middelbaar', label: 'Middelbaar' },
 ];
 
 function DateNav({ dateKey, todayKey, onChange }) {
@@ -78,7 +85,7 @@ function DateNav({ dateKey, todayKey, onChange }) {
   );
 }
 
-function StatRow({ label, icon: Icon, value, total, tone }) {
+function StatRow({ label, icon: Icon, value, total, tone, hint }) {
   const pct = total ? Math.round((value / total) * 100) : 0;
   return (
     <div className={clsx('stat-row', `stat-row--${tone}`)}>
@@ -94,6 +101,7 @@ function StatRow({ label, icon: Icon, value, total, tone }) {
       <div className="bar">
         <span className="bar__fill" style={{ width: `${pct}%` }} />
       </div>
+      {hint && <p className="stat-row__hint">{hint}</p>}
     </div>
   );
 }
@@ -117,19 +125,50 @@ export default function TodayView({
 }) {
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState('all');
+  const [level, setLevel] = useState('all');
 
   useEffect(() => {
     setQuery('');
     setFilter('all');
+    setLevel('all');
   }, [segment]);
 
   const presentSet = useMemo(() => new Set(db.attendance[dateKey] || []), [db.attendance, dateKey]);
-  const kidsPresent = useMemo(() => db.students.filter((s) => presentSet.has(s.id)).length, [db.students, presentSet]);
-  const staffPresent = useMemo(() => db.staff.filter((s) => presentSet.has(s.id)).length, [db.staff, presentSet]);
-  const totalPeople = db.students.length + db.staff.length;
 
-  const list = segment === 'students' ? db.students : db.staff;
-  const sorted = useMemo(() => [...list].sort(byName), [list]);
+  // Archived people stay hidden, unless they were present on the day you're looking at.
+  const students = useMemo(() => db.students.filter((p) => !p.archived || presentSet.has(p.id)), [db.students, presentSet]);
+  const staff = useMemo(() => db.staff.filter((p) => !p.archived || presentSet.has(p.id)), [db.staff, presentSet]);
+
+  const kidsPresentList = useMemo(() => students.filter((s) => presentSet.has(s.id)), [students, presentSet]);
+  const kidsPresent = kidsPresentList.length;
+  const staffPresent = useMemo(() => staff.filter((s) => presentSet.has(s.id)).length, [staff, presentSet]);
+  const totalPeople = students.length + staff.length;
+
+  const hasMiddelbaar = useMemo(() => students.some((p) => levelOf(p) === 'middelbaar'), [students]);
+  const levelHint = useMemo(() => {
+    if (!hasMiddelbaar) return null;
+    const lager = kidsPresentList.filter((p) => levelOf(p) === 'lager').length;
+    const middelbaar = kidsPresentList.filter((p) => levelOf(p) === 'middelbaar').length;
+    return `${lager} lager · ${middelbaar} middelbaar`;
+  }, [hasMiddelbaar, kidsPresentList]);
+
+  const list = segment === 'students' ? students : staff;
+  const showLevels = segment === 'students' && hasMiddelbaar;
+  const activeLevel = showLevels ? level : 'all';
+
+  const sorted = useMemo(() => {
+    const base = activeLevel === 'all' ? list : list.filter((p) => levelOf(p) === activeLevel);
+    return [...base].sort(byName);
+  }, [list, activeLevel]);
+
+  const levelCounts = useMemo(
+    () => ({
+      all: list.length,
+      lager: list.filter((p) => levelOf(p) === 'lager').length,
+      middelbaar: list.filter((p) => levelOf(p) === 'middelbaar').length,
+    }),
+    [list],
+  );
 
   const searched = useMemo(() => {
     const q = normalizeSearch(query);
@@ -187,8 +226,8 @@ export default function TodayView({
             <span className="ring__label">aanwezig</span>
           </ProgressRing>
           <div className="hero__rows">
-            <StatRow label="Kinderen" icon={Backpack} value={kidsPresent} total={db.students.length} tone="kids" />
-            <StatRow label="Medewerkers" icon={Briefcase} value={staffPresent} total={db.staff.length} tone="staff" />
+            <StatRow label="Kinderen" icon={Backpack} value={kidsPresent} total={students.length} tone="kids" hint={levelHint} />
+            <StatRow label="Medewerkers" icon={Briefcase} value={staffPresent} total={staff.length} tone="staff" />
           </div>
         </div>
 
@@ -214,7 +253,7 @@ export default function TodayView({
             onClick={() => onSegmentChange('students')}
           >
             <Backpack size={16} /> Kinderen
-            <span className="segmented__count">{db.students.length}</span>
+            <span className="segmented__count">{students.length}</span>
           </button>
           <button
             id="tab-staff"
@@ -225,7 +264,7 @@ export default function TodayView({
             onClick={() => onSegmentChange('staff')}
           >
             <Briefcase size={16} /> Medewerkers
-            <span className="segmented__count">{db.staff.length}</span>
+            <span className="segmented__count">{staff.length}</span>
           </button>
         </div>
 
@@ -248,6 +287,23 @@ export default function TodayView({
                 </button>
               )}
             </div>
+
+            {showLevels && (
+              <div className="chips chips--levels" role="group" aria-label="Niveau">
+                {LEVEL_FILTERS.map((f) => (
+                  <button
+                    key={f.id}
+                    id={`level-filter-${f.id}`}
+                    type="button"
+                    className={clsx('chip chip--sm', `chip--level-${f.id}`, level === f.id && 'is-active')}
+                    onClick={() => setLevel(f.id)}
+                  >
+                    {f.label}
+                    <span className="chip__count">{levelCounts[f.id]}</span>
+                  </button>
+                ))}
+              </div>
+            )}
 
             <div className="chips" role="group" aria-label="Filter">
               {FILTERS.map((f) => (
@@ -314,7 +370,16 @@ export default function TodayView({
                       {p.firstName} <span className="person__last">{p.lastName}</span>
                     </span>
                     <span className="person__meta">
-                      {p.extraInfo ? <span className="tag">{p.extraInfo}</span> : <span className="muted">Geen {labels.extra.toLowerCase()}</span>}
+                      {p.extraInfo ? (
+                        segment === 'students' ? <ClassTag person={p} /> : <span className="tag">{p.extraInfo}</span>
+                      ) : (
+                        <span className="muted">Geen {labels.extra.toLowerCase()}</span>
+                      )}
+                      {p.archived && (
+                        <span className="tag tag--archived" title="Gearchiveerd">
+                          <Archive size={11} />
+                        </span>
+                      )}
                       {present && <span className="person__status">Aanwezig</span>}
                     </span>
                   </span>

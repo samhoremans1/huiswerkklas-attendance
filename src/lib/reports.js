@@ -1,8 +1,23 @@
 // Report builders: plain-text day report (mail / share) and Word (.doc) report.
 import { fmt, toKey, monthKey, prevMonthKey } from './dates';
-import { fullName, byName } from './people';
+import { fullName, byName, byClass, groupByLevel, levelOf, LEVEL_LABEL } from './people';
 
+/** Used when no recipient is set in the settings. */
 export const REPORT_RECIPIENT = 'samhoremans1@gmail.com';
+
+/** Splits "a@x.be, b@y.be" into a clean list. */
+export const parseRecipients = (s) =>
+  String(s ?? '')
+    .split(/[,;\s]+/)
+    .map((x) => x.trim())
+    .filter(Boolean);
+
+export const isValidEmail = (s) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s);
+
+export const reportRecipient = (db) => {
+  const list = parseRecipients(db.settings?.reportRecipient).filter(isValidEmail);
+  return list.length ? list.join(',') : REPORT_RECIPIENT;
+};
 
 export const escapeHtml = (s) =>
   String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
@@ -10,7 +25,7 @@ export const escapeHtml = (s) =>
 export function getPresent(db, dateKey) {
   const set = new Set(db.attendance[dateKey] || []);
   return {
-    kids: db.students.filter((s) => set.has(s.id)).sort(byName),
+    kids: db.students.filter((s) => set.has(s.id)).sort(byClass),
     staff: db.staff.filter((s) => set.has(s.id)).sort(byName),
   };
 }
@@ -18,10 +33,19 @@ export function getPresent(db, dateKey) {
 export function buildDayReport(db, dateKey) {
   const { kids, staff } = getPresent(db, dateKey);
   const dateStr = fmt(dateKey, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+  const kidLine = (k) => `- ${fullName(k)} [${k.extraInfo || 'Geen klas'}]\n`;
 
   let text = `Aanwezigheidsrapportage - ${dateStr}\n\n`;
   text += `--- KINDEREN (${kids.length}) ---\n`;
-  kids.forEach((k) => (text += `- ${fullName(k)} [${k.extraInfo || 'Geen klas'}]\n`));
+  const groups = groupByLevel(kids);
+  if (groups.some((g) => g.id === 'middelbaar')) {
+    groups.forEach((g, i) => {
+      text += `${i ? '\n' : ''}${g.label} (${g.people.length})\n`;
+      g.people.forEach((k) => (text += kidLine(k)));
+    });
+  } else {
+    kids.forEach((k) => (text += kidLine(k)));
+  }
   text += `\n--- MEDEWERKERS (${staff.length}) ---\n`;
   staff.forEach((s) => (text += `- ${fullName(s)} [${s.extraInfo || 'Geen functie'}]\n`));
 
@@ -61,19 +85,27 @@ export function buildWordReport(db, period = 'all') {
   // Totals per person within the period
   const counts = new Map();
   dates.forEach((d) => db.attendance[d].forEach((id) => counts.set(id, (counts.get(id) || 0) + 1)));
-  const summaryRows = (list, type) =>
+  const kidType = (p) => (levelOf(p) ? `Kind · ${LEVEL_LABEL[levelOf(p)]}` : 'Kind');
+  const nameCell = (p) => `${escapeHtml(fullName(p))}${p.archived ? ' <span class="type-tag">(gearchiveerd)</span>' : ''}`;
+  const summaryRows = (list, typeOf, sort) =>
     [...list]
       .filter((p) => counts.get(p.id))
-      .sort(byName)
+      .sort(sort)
       .map(
-        (p) => `<tr><td>${escapeHtml(fullName(p))}</td><td><span class="type-tag">${type}</span></td><td>${escapeHtml(p.extraInfo || '-')}</td><td class="num">${counts.get(p.id)}</td></tr>`,
+        (p) => `<tr><td>${nameCell(p)}</td><td><span class="type-tag">${typeOf(p)}</span></td><td>${escapeHtml(p.extraInfo || '-')}</td><td class="num">${counts.get(p.id)}</td></tr>`,
       )
       .join('');
+
+  // Unique children per level in this period
+  const kidsInPeriod = db.students.filter((p) => counts.get(p.id));
+  const perLevel = groupByLevel(kidsInPeriod)
+    .map((g) => `${g.label.toLowerCase()}: ${g.people.length}`)
+    .join(', ');
 
   let detailRows = '';
   dates.forEach((date) => {
     const { kids, staff } = getPresent(db, date);
-    const people = [...kids.map((p) => [p, 'Kind']), ...staff.map((p) => [p, 'Medewerker'])];
+    const people = [...kids.map((p) => [p, kidType(p)]), ...staff.map((p) => [p, 'Medewerker'])];
     const readable = fmt(date, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
     people.forEach(([p, type], i) => {
       detailRows += `<tr>
@@ -102,11 +134,12 @@ export function buildWordReport(db, period = 'all') {
   <body>
     <h1>Aanwezigheidsoverzicht Huiswerkklas</h1>
     <p class="meta">Periode: <strong>${periodLabel}</strong> &middot; ${dates.length} sessies &middot; Gegenereerd op ${escapeHtml(now.toLocaleString('nl-BE'))}</p>
+    <p class="meta">${kidsInPeriod.length} verschillende kinderen${perLevel ? ` (${escapeHtml(perLevel)})` : ''}</p>
 
     <h2>Overzicht per persoon</h2>
     <table>
       <thead><tr><th>Naam</th><th>Type</th><th>Klas / Functie</th><th>Dagen aanwezig</th></tr></thead>
-      <tbody>${summaryRows(db.students, 'Kind')}${summaryRows(db.staff, 'Medewerker')}</tbody>
+      <tbody>${summaryRows(db.students, kidType, byClass)}${summaryRows(db.staff, () => 'Medewerker', byName)}</tbody>
     </table>
 
     <h2>Detail per dag</h2>

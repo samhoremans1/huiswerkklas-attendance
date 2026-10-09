@@ -12,7 +12,7 @@ import {
   CircleCheck,
   TriangleAlert,
 } from 'lucide-react';
-import { initials, avatarGradient } from '../lib/people';
+import { initials, avatarGradient, levelOf } from '../lib/people';
 import { greeting } from '../lib/dates';
 
 export function Avatar({ person, size = 44, ring = false, className }) {
@@ -25,6 +25,13 @@ export function Avatar({ person, size = 44, ring = false, className }) {
       {initials(person)}
     </span>
   );
+}
+
+/** Class badge, coloured per school level (lager / middelbaar). */
+export function ClassTag({ person, className }) {
+  if (!person?.extraInfo) return null;
+  const level = levelOf(person);
+  return <span className={clsx('tag', level && `tag--${level}`, className)}>{person.extraInfo}</span>;
 }
 
 export function ProgressRing({ value, max, size = 120, stroke = 11, children }) {

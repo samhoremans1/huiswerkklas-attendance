@@ -2,12 +2,14 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { fetchDataFromGitHub, saveDataToGitHub, isGitHubSyncEnabled } from '../github-sync';
 import { newId } from '../lib/people';
+import { toKey } from '../lib/dates';
 
 // Same keys as the previous version so existing data on the device is kept.
 const KEYS = {
   STUDENTS: 'hwk_students',
   STAFF: 'hwk_staff',
   ATTENDANCE: 'hwk_attendance',
+  SETTINGS: 'hwk_settings',
   DIRTY: 'hwk_dirty', // set while local changes haven't reached GitHub yet
 };
 
@@ -44,14 +46,29 @@ export function normalizeDb(raw = {}) {
     Array.isArray(arr)
       ? arr
           .filter((p) => p && p.id != null)
-          .map((p) => ({
-            ...p,
-            id: String(p.id),
-            firstName: cleanText(p.firstName),
-            lastName: cleanText(p.lastName),
-            extraInfo: cleanText(p.extraInfo),
-          }))
+          .map((p) => {
+            const out = {
+              ...p,
+              id: String(p.id),
+              firstName: cleanText(p.firstName),
+              lastName: cleanText(p.lastName),
+              extraInfo: cleanText(p.extraInfo),
+            };
+            // Only store archive info for archived people (keeps data.json small).
+            if (out.archived) out.archived = true;
+            else {
+              delete out.archived;
+              delete out.archivedAt;
+            }
+            return out;
+          })
       : [];
+
+  const s = raw.settings && typeof raw.settings === 'object' ? raw.settings : {};
+  const settings = {
+    reportRecipient: cleanText(s.reportRecipient),
+    lastSchoolYear: cleanText(s.lastSchoolYear),
+  };
 
   const attendance = {};
   if (raw.attendance && typeof raw.attendance === 'object') {
@@ -65,7 +82,7 @@ export function normalizeDb(raw = {}) {
       });
   }
 
-  return { students: people(raw.students), staff: people(raw.staff), attendance };
+  return { students: people(raw.students), staff: people(raw.staff), attendance, settings };
 }
 
 export const isValidBackup = (data) =>
@@ -77,6 +94,7 @@ export function useAppData() {
       students: readJSON(KEYS.STUDENTS, []),
       staff: readJSON(KEYS.STAFF, []),
       attendance: readJSON(KEYS.ATTENDANCE, {}),
+      settings: readJSON(KEYS.SETTINGS, {}),
     }),
   );
   const [syncStatus, setSyncStatus] = useState(SYNC ? 'syncing' : 'off'); // off | syncing | synced | error
@@ -172,6 +190,7 @@ export function useAppData() {
       localStorage.setItem(KEYS.STUDENTS, JSON.stringify(db.students));
       localStorage.setItem(KEYS.STAFF, JSON.stringify(db.staff));
       localStorage.setItem(KEYS.ATTENDANCE, JSON.stringify(db.attendance));
+      localStorage.setItem(KEYS.SETTINGS, JSON.stringify(db.settings));
     } catch (err) {
       console.error('localStorage error', err);
     }
@@ -206,7 +225,7 @@ export function useAppData() {
   }, []);
 
   const addPerson = useCallback((type, values) => {
-    const person = { id: newId(), ...values };
+    const person = { id: newId(), since: toKey(), ...values };
     setDb((prev) => ({ ...prev, [type]: [...prev[type], person] }));
     return person;
   }, []);
@@ -226,6 +245,39 @@ export function useAppData() {
     });
   }, []);
 
+  const setArchived = useCallback((type, id, archived) => {
+    setDb((prev) => ({
+      ...prev,
+      [type]: prev[type].map((p) => {
+        if (p.id !== id) return p;
+        const { archived: _a, archivedAt: _b, ...rest } = p;
+        return archived ? { ...rest, archived: true, archivedAt: toKey() } : rest;
+      }),
+    }));
+  }, []);
+
+  /**
+   * New school year. `changes` = [{ id, to }] (new class) or [{ id, archive: true }].
+   */
+  const applySchoolYear = useCallback((changes, yearLabel) => {
+    const byId = new Map(changes.map((c) => [c.id, c]));
+    const today = toKey();
+    setDb((prev) => ({
+      ...prev,
+      students: prev.students.map((p) => {
+        const c = byId.get(p.id);
+        if (!c) return p;
+        if (c.archive) return { ...p, archived: true, archivedAt: today };
+        return { ...p, extraInfo: c.to };
+      }),
+      settings: { ...prev.settings, lastSchoolYear: yearLabel },
+    }));
+  }, []);
+
+  const updateSettings = useCallback((patch) => {
+    setDb((prev) => ({ ...prev, settings: { ...prev.settings, ...patch } }));
+  }, []);
+
   const replaceAll = useCallback((data) => setDb(normalizeDb(data)), []);
 
   const sync = useCallback(() => pull(), [pull]);
@@ -241,6 +293,9 @@ export function useAppData() {
     addPerson,
     updatePerson,
     deletePerson,
+    setArchived,
+    applySchoolYear,
+    updateSettings,
     replaceAll,
   };
 }

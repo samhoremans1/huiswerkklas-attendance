@@ -1,10 +1,31 @@
 import { useMemo, useState } from 'react';
 import clsx from 'clsx';
-import { Backpack, Briefcase, Pencil, Trash2, Flame, CalendarCheck, Percent, TriangleAlert } from 'lucide-react';
+import {
+  Backpack,
+  Briefcase,
+  Pencil,
+  Trash2,
+  Flame,
+  CalendarCheck,
+  Percent,
+  TriangleAlert,
+  Archive,
+  ArchiveRestore,
+  Info,
+} from 'lucide-react';
 import Sheet from './Sheet';
-import { Avatar } from './ui';
+import { Avatar, ClassTag } from './ui';
 import { fmt, relativeDay } from '../lib/dates';
-import { CLASSES, STAFF_ROLES, TYPE_LABEL, fullName, normalizeSearch } from '../lib/people';
+import {
+  CLASSES_BY_LEVEL,
+  LEVELS,
+  STAFF_ROLES,
+  TYPE_LABEL,
+  fullName,
+  normalizeSearch,
+  parseClass,
+  personStats,
+} from '../lib/people';
 
 /* ------------------------------------------------------------------ */
 /* Add / edit form                                                     */
@@ -16,17 +37,25 @@ function PersonFormBody({ state, db, onSubmit, onClose }) {
   const [firstName, setFirstName] = useState(state.person?.firstName ?? '');
   const [lastName, setLastName] = useState(state.person?.lastName ?? '');
   const [extraInfo, setExtraInfo] = useState(state.person?.extraInfo ?? '');
+  const [level, setLevel] = useState(() => parseClass(state.person?.extraInfo)?.level ?? 'lager');
 
   const duplicate = useMemo(() => {
     const name = normalizeSearch(`${firstName} ${lastName}`);
-    if (!firstName.trim() || !lastName.trim()) return false;
-    return db[type].some((p) => p.id !== state.person?.id && normalizeSearch(fullName(p)) === name);
+    if (!firstName.trim() || !lastName.trim()) return null;
+    return db[type].find((p) => p.id !== state.person?.id && normalizeSearch(fullName(p)) === name) ?? null;
   }, [db, type, firstName, lastName, state.person]);
 
-  const classOptions = useMemo(
-    () => (extraInfo && type === 'students' && !CLASSES.includes(extraInfo) ? [...CLASSES, extraInfo] : CLASSES),
-    [extraInfo, type],
-  );
+  // Standard classes of the chosen level, plus an old free-text class if the person has one.
+  const classOptions = useMemo(() => {
+    const base = CLASSES_BY_LEVEL[level];
+    return extraInfo && !parseClass(extraInfo) ? [...base, extraInfo] : base;
+  }, [level, extraInfo]);
+
+  const switchLevel = (next) => {
+    if (next === level) return;
+    setLevel(next);
+    if (parseClass(extraInfo)) setExtraInfo(''); // selected class belongs to the other level
+  };
 
   const submit = (e) => {
     e.preventDefault();
@@ -92,20 +121,45 @@ function PersonFormBody({ state, db, onSubmit, onClose }) {
 
       {type === 'students' ? (
         <div className="field">
-          <span className="field__label">Klas</span>
-          <div className="class-grid">
-            {classOptions.map((c) => (
-              <button
-                key={c}
-                type="button"
-                className={clsx('class-chip', extraInfo === c && 'is-active')}
-                onClick={() => setExtraInfo((v) => (v === c ? '' : c))}
-                aria-pressed={extraInfo === c}
-              >
-                <strong>{c.split(' ')[0]}</strong>
-                {CLASSES.includes(c) && <span>leerjaar</span>}
-              </button>
-            ))}
+          <div className="field__head">
+            <span className="field__label">Klas</span>
+            <div
+              className="segmented segmented--sm"
+              style={{ '--active': level === 'lager' ? 0 : 1 }}
+              role="group"
+              aria-label="Niveau"
+            >
+              <span className={clsx('segmented__indicator', level === 'middelbaar' && 'segmented__indicator--pink')} aria-hidden="true" />
+              {LEVELS.map((l) => (
+                <button
+                  key={l.id}
+                  id={`level-${l.id}`}
+                  type="button"
+                  className={clsx('segmented__btn', level === l.id && 'is-active')}
+                  onClick={() => switchLevel(l.id)}
+                  aria-pressed={level === l.id}
+                >
+                  {l.label}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div key={level} className={clsx('class-grid', `class-grid--${level}`)}>
+            {classOptions.map((c) => {
+              const parsed = parseClass(c);
+              return (
+                <button
+                  key={c}
+                  type="button"
+                  className={clsx('class-chip', extraInfo === c && 'is-active')}
+                  onClick={() => setExtraInfo((v) => (v === c ? '' : c))}
+                  aria-pressed={extraInfo === c}
+                >
+                  <strong>{parsed ? c.split(' ')[0] : c}</strong>
+                  {parsed && <span>{LEVELS.find((l) => l.id === parsed.level).unit}</span>}
+                </button>
+              );
+            })}
           </div>
         </div>
       ) : (
@@ -132,7 +186,8 @@ function PersonFormBody({ state, db, onSubmit, onClose }) {
 
       {duplicate && (
         <p className="form-hint">
-          <TriangleAlert size={15} /> Er bestaat al iemand met deze naam.
+          <TriangleAlert size={15} />
+          {duplicate.archived ? 'Er staat al iemand met deze naam in het archief.' : 'Er bestaat al iemand met deze naam.'}
         </p>
       )}
 
@@ -167,30 +222,13 @@ export function PersonFormSheet({ open, state, db, onSubmit, onClose }) {
 /* Person detail / stats                                               */
 /* ------------------------------------------------------------------ */
 
-export function PersonDetailSheet({ open, person, type, db, todayKey, onEdit, onDelete, onClose }) {
-  const stats = useMemo(() => {
-    if (!person) return null;
-    const sessionDays = Object.keys(db.attendance)
-      .filter((d) => db.attendance[d].length > 0)
-      .sort((a, b) => b.localeCompare(a));
-    const presentDays = sessionDays.filter((d) => db.attendance[d].includes(person.id));
-    let streak = 0;
-    for (const d of sessionDays) {
-      if (db.attendance[d].includes(person.id)) streak++;
-      else break;
-    }
-    const recent = sessionDays.slice(0, 14).reverse().map((d) => ({ date: d, present: db.attendance[d].includes(person.id) }));
-    return {
-      days: presentDays.length,
-      pct: sessionDays.length ? Math.round((presentDays.length / sessionDays.length) * 100) : 0,
-      streak,
-      presentDays,
-      recent,
-    };
-  }, [person, db.attendance]);
+export function PersonDetailSheet({ open, person, type, db, todayKey, onEdit, onDelete, onArchive, onRestore, onClose }) {
+  const stats = useMemo(() => (person ? personStats(person, db.attendance) : null), [person, db.attendance]);
 
   if (!person || !stats) return null;
   const labels = TYPE_LABEL[type];
+  const archived = !!person.archived;
+  const shortDate = (d) => fmt(d, { day: 'numeric', month: 'short', year: 'numeric' });
 
   return (
     <Sheet
@@ -198,24 +236,40 @@ export function PersonDetailSheet({ open, person, type, db, todayKey, onEdit, on
       onClose={onClose}
       className="sheet--detail"
       footer={
-        <div className="sheet-actions">
-          <button id="deletePersonBtn" type="button" className="btn btn--danger" onClick={onDelete}>
-            <Trash2 size={17} /> Verwijderen
-          </button>
-          <button id="editPersonBtn" type="button" className="btn btn--primary" onClick={onEdit}>
-            <Pencil size={17} /> Bewerken
-          </button>
-        </div>
+        archived ? (
+          <div className="sheet-actions">
+            <button id="deletePersonBtn" type="button" className="btn btn--danger" onClick={onDelete}>
+              <Trash2 size={17} /> Verwijderen
+            </button>
+            <button id="restorePersonBtn" type="button" className="btn btn--primary" onClick={onRestore}>
+              <ArchiveRestore size={17} /> Terugzetten
+            </button>
+          </div>
+        ) : (
+          <div className="sheet-actions">
+            <button id="archivePersonBtn" type="button" className="btn btn--glass" onClick={onArchive}>
+              <Archive size={17} /> Archiveren
+            </button>
+            <button id="editPersonBtn" type="button" className="btn btn--primary" onClick={onEdit}>
+              <Pencil size={17} /> Bewerken
+            </button>
+          </div>
+        )
       }
     >
       <div className="profile">
-        <Avatar person={person} size={76} className="profile__avatar" />
+        <Avatar person={person} size={76} className={clsx('profile__avatar', archived && 'avatar--muted')} />
         <h3 className="profile__name">{fullName(person)}</h3>
         <div className="profile__meta">
           <span className={clsx('tag', type === 'staff' && 'tag--staff')}>
             {type === 'students' ? <Backpack size={12} /> : <Briefcase size={12} />} {labels.one}
           </span>
-          {person.extraInfo && <span className="tag tag--muted">{person.extraInfo}</span>}
+          {person.extraInfo && (type === 'students' ? <ClassTag person={person} /> : <span className="tag tag--muted">{person.extraInfo}</span>)}
+          {archived && (
+            <span className="tag tag--archived">
+              <Archive size={12} /> Gearchiveerd{person.archivedAt ? ` op ${shortDate(person.archivedAt)}` : ''}
+            </span>
+          )}
         </div>
       </div>
 
@@ -227,7 +281,7 @@ export function PersonDetailSheet({ open, person, type, db, todayKey, onEdit, on
         </div>
         <div className="tile tile--cyan">
           <Percent size={16} />
-          <span className="tile__value">{stats.pct}%</span>
+          <span className="tile__value">{stats.pct == null ? '–' : `${stats.pct}%`}</span>
           <span className="tile__label">Aanwezig</span>
         </div>
         <div className="tile tile--amber">
@@ -236,6 +290,14 @@ export function PersonDetailSheet({ open, person, type, db, todayKey, onEdit, on
           <span className="tile__label">Op rij</span>
         </div>
       </div>
+
+      {stats.start && (
+        <p className="stat-note">
+          <Info size={13} />
+          {stats.sessions} {stats.sessions === 1 ? 'sessie' : 'sessies'} sinds {shortDate(stats.start)}
+          {archived && person.archivedAt ? ` tot ${shortDate(person.archivedAt)}` : ''}
+        </p>
+      )}
 
       {stats.recent.length > 0 && (
         <div className="detail-block">
@@ -267,6 +329,12 @@ export function PersonDetailSheet({ open, person, type, db, todayKey, onEdit, on
           </div>
         )}
       </div>
+
+      {!archived && (
+        <button id="deletePersonLink" type="button" className="text-btn text-btn--danger" onClick={onDelete}>
+          <Trash2 size={14} /> Definitief verwijderen
+        </button>
+      )}
     </Sheet>
   );
 }

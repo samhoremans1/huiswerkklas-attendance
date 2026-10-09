@@ -3,7 +3,7 @@ import clsx from 'clsx';
 import { CalendarDays, ChevronDown, Pencil, Backpack, Briefcase, TrendingUp, Trophy, CalendarCheck } from 'lucide-react';
 import { Avatar, EmptyState } from './ui';
 import { fmt, relativeDay, capitalize, monthKey } from '../lib/dates';
-import { byName, fullName } from '../lib/people';
+import { byName, fullName, levelOf } from '../lib/people';
 
 function DayCard({ session, todayKey, onEditDay, defaultOpen }) {
   const [open, setOpen] = useState(defaultOpen);
@@ -43,7 +43,9 @@ function DayCard({ session, todayKey, onEditDay, defaultOpen }) {
                 </p>
                 <div className="name-tags">
                   {kids.map((k) => (
-                    <span key={k.id} className="name-tag">{fullName(k)}</span>
+                    <span key={k.id} className={clsx('name-tag', levelOf(k) === 'middelbaar' && 'name-tag--middelbaar')}>
+                      {fullName(k)}
+                    </span>
                   ))}
                 </div>
               </>
@@ -91,7 +93,7 @@ export default function HistoryView({ db, todayKey, onEditDay, onOpenPerson }) {
     const counts = new Map();
     sessions.forEach((s) => s.kids.forEach((k) => counts.set(k.id, (counts.get(k.id) || 0) + 1)));
     const top = db.students
-      .filter((s) => counts.get(s.id))
+      .filter((s) => counts.get(s.id) && !s.archived)
       .map((s) => ({ person: s, count: counts.get(s.id) }))
       .sort((a, b) => b.count - a.count || byName(a.person, b.person))
       .slice(0, 3);
