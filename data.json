@@ -26,7 +26,11 @@
       "extraInfo": "Vrijwilliger"
     }
   ],
-  "attendance": {},
+  "attendance": {
+    "2026-10-09": [
+      "1791464497393914"
+    ]
+  },
   "settings": {
     "reportRecipient": "sam@vzwoc.be, katrien@vzwoc.be",
     "lastSchoolYear": ""
