@@ -34,6 +34,13 @@
       "firstName": "Aya",
       "lastName": "Jouied Mouhli",
       "extraInfo": "4de Leerjaar"
+    },
+    {
+      "id": "1791622769583900",
+      "since": "2026-10-10",
+      "firstName": "Amira",
+      "lastName": "Jouied Mouhli",
+      "extraInfo": "4de Leerjaar"
     }
   ],
   "staff": [
@@ -77,7 +84,8 @@
       "1773334423780",
       "1791622671621646",
       "1791622706542715",
-      "1791622758164047"
+      "1791622758164047",
+      "1791622769583900"
     ]
   },
   "settings": {
