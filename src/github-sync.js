@@ -7,8 +7,6 @@ const REPO = import.meta.env.VITE_GITHUB_REPO;
 const DATA_PATH = import.meta.env.VITE_GITHUB_DATA_PATH || 'data.json';
 const API_BASE = `https://api.github.com/repos/${REPO}/contents/${DATA_PATH}`;
 
-let currentSha = null; // Required by GitHub API to update a file
-
 const headers = () => ({
   'Authorization': `Bearer ${TOKEN}`,
   'Accept': 'application/vnd.github+json',
@@ -40,7 +38,7 @@ export function isGitHubSyncEnabled() {
 
 /**
  * Fetch all data from GitHub.
- * Returns { students, staff, attendance } or null if no data exists yet.
+ * Returns { data, sha } or null if no data file exists yet.
  * Throws on network / API errors.
  */
 export async function fetchDataFromGitHub() {
@@ -50,7 +48,6 @@ export async function fetchDataFromGitHub() {
 
   if (res.status === 404) {
     // File doesn't exist yet — that's fine, we'll create it on first save
-    currentSha = null;
     return null;
   }
 
@@ -59,17 +56,23 @@ export async function fetchDataFromGitHub() {
   }
 
   const json = await res.json();
-  currentSha = json.sha; // Remember SHA for updates
-  return JSON.parse(decodeBase64Utf8(json.content));
+  return { data: JSON.parse(decodeBase64Utf8(json.content)), sha: json.sha };
 }
 
 /**
  * Save all data to GitHub.
+ *
+ * `sha` must be the SHA of the version the data was based on. If the file was
+ * changed elsewhere in the meantime GitHub rejects the save and this throws an
+ * error with `conflict = true` — the caller then has to fetch + merge again.
+ * We never blindly overwrite, otherwise changes from other devices get lost.
+ *
  * @param {{ students: Array, staff: Array, attendance: Object }} data
- * @param {{ keepalive?: boolean, retry?: boolean }} [options]
+ * @param {{ sha?: string|null, keepalive?: boolean }} [options]
+ * @returns {Promise<string>} the new SHA
  */
-export async function saveDataToGitHub(data, { keepalive = false, retry = true } = {}) {
-  if (!isGitHubSyncEnabled()) return;
+export async function saveDataToGitHub(data, { sha = null, keepalive = false } = {}) {
+  if (!isGitHubSyncEnabled()) return null;
 
   const body = {
     message: `Auto-sync: ${new Date().toLocaleString('nl-BE')}`,
@@ -77,7 +80,7 @@ export async function saveDataToGitHub(data, { keepalive = false, retry = true }
   };
 
   // If the file already exists, we need to provide the SHA
-  if (currentSha) body.sha = currentSha;
+  if (sha) body.sha = sha;
 
   const payload = JSON.stringify(body);
   const res = await fetch(API_BASE, {
@@ -89,15 +92,12 @@ export async function saveDataToGitHub(data, { keepalive = false, retry = true }
   });
 
   if (!res.ok) {
-    const errorText = await res.text();
-    // SHA conflict (file changed elsewhere / unknown sha): refresh SHA and retry once
-    if (retry && (res.status === 409 || res.status === 422)) {
-      await fetchDataFromGitHub().catch(() => {});
-      return saveDataToGitHub(data, { keepalive, retry: false });
-    }
-    throw new Error(`GitHub save error ${res.status}: ${errorText}`);
+    const err = new Error(`GitHub save error ${res.status}: ${await res.text()}`);
+    // 409 = file changed elsewhere, 422 = sha missing/unknown
+    err.conflict = res.status === 409 || res.status === 422;
+    throw err;
   }
 
   const json = await res.json();
-  currentSha = json.content.sha; // Update SHA for next save
+  return json.content.sha;
 }

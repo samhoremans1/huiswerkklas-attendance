@@ -3,6 +3,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { fetchDataFromGitHub, saveDataToGitHub, isGitHubSyncEnabled } from '../github-sync';
 import { newId } from '../lib/people';
 import { toKey } from '../lib/dates';
+import { mergeDb } from '../lib/merge';
 
 // Same keys as the previous version so existing data on the device is kept.
 const KEYS = {
@@ -11,7 +12,10 @@ const KEYS = {
   ATTENDANCE: 'hwk_attendance',
   SETTINGS: 'hwk_settings',
   DIRTY: 'hwk_dirty', // set while local changes haven't reached GitHub yet
+  BASE: 'hwk_base', // last version synced with GitHub (common ancestor for merging)
 };
+
+const MAX_SAVE_ATTEMPTS = 4;
 
 const SYNC = isGitHubSyncEnabled();
 const SAVE_DELAY = 1200;
@@ -102,88 +106,131 @@ export function useAppData() {
   const [ready, setReady] = useState(!SYNC);
 
   const dbRef = useRef(db);
-  const lastSyncedJson = useRef(null);
+  // Last version this device synced with GitHub. Local changes are computed
+  // against it, so only *our* changes are applied on top of the GitHub version.
+  const baseRef = useRef(null);
+  const baseJson = useRef(null);
+  if (baseJson.current === null) {
+    const stored = readJSON(KEYS.BASE, null);
+    baseRef.current = stored ? normalizeDb(stored) : null;
+    baseJson.current = stored ? JSON.stringify(baseRef.current) : '';
+  }
+  const shaRef = useRef(null); // SHA of the GitHub file that matches baseRef
   const saveTimer = useRef(null);
   const lastPull = useRef(0);
+  const running = useRef(null);
+  const runAgain = useRef(false);
+
+  const setBase = useCallback((data) => {
+    baseRef.current = data;
+    baseJson.current = JSON.stringify(data);
+    try {
+      localStorage.setItem(KEYS.BASE, baseJson.current);
+    } catch (err) {
+      console.error('localStorage error', err);
+    }
+  }, []);
+
+  const hasLocalChanges = useCallback(
+    (data) => (baseRef.current ? JSON.stringify(data) !== baseJson.current : !!localStorage.getItem(KEYS.DIRTY)),
+    [],
+  );
 
   // ---- Sync primitives ----------------------------------------------------
-  const push = useCallback(async ({ keepalive = false } = {}) => {
-    clearTimeout(saveTimer.current);
-    saveTimer.current = null;
-    const snapshot = dbRef.current;
-    const json = JSON.stringify(snapshot);
-    if (json === lastSyncedJson.current) {
-      localStorage.removeItem(KEYS.DIRTY);
-      setSyncStatus('synced');
-      return;
-    }
+  // One sync cycle: fetch GitHub -> merge with local changes -> save if needed.
+  // Never overwrites changes made on another device.
+  const runSync = useCallback(async () => {
+    lastPull.current = Date.now();
     setSyncStatus('syncing');
     try {
-      await saveDataToGitHub(snapshot, { keepalive });
-      lastSyncedJson.current = json;
-      if (JSON.stringify(dbRef.current) === json) localStorage.removeItem(KEYS.DIRTY);
+      for (let attempt = 1; ; attempt++) {
+        const local = dbRef.current;
+        const dirty = hasLocalChanges(local);
+        const res = await fetchDataFromGitHub();
+        const remote = res ? normalizeDb(res.data) : null;
+        shaRef.current = res?.sha ?? null;
+
+        let next;
+        if (!remote) next = normalizeDb(local); // no file yet -> create it
+        else if (!dirty) next = remote; // nothing changed here -> just take GitHub
+        else next = normalizeDb(mergeDb(baseRef.current, normalizeDb(local), remote));
+
+        if (!remote || JSON.stringify(next) !== JSON.stringify(remote)) {
+          try {
+            shaRef.current = await saveDataToGitHub(next, { sha: shaRef.current });
+          } catch (err) {
+            // Someone else saved in between: fetch + merge again.
+            if (err.conflict && attempt < MAX_SAVE_ATTEMPTS) continue;
+            throw err;
+          }
+        }
+
+        setBase(next);
+        // Keep edits made on this device while we were syncing.
+        setDb((prev) => (prev === local ? next : normalizeDb(mergeDb(normalizeDb(local), normalizeDb(prev), next))));
+        break;
+      }
       setSyncStatus('synced');
       setLastSyncedAt(new Date());
     } catch (err) {
       console.error(err);
       setSyncStatus('error');
     }
-  }, []);
+    setReady(true);
+  }, [hasLocalChanges, setBase]);
 
-  const pull = useCallback(
-    async ({ force = false } = {}) => {
-      if (!SYNC) return;
-      lastPull.current = Date.now();
+  // Serialized: never two sync cycles at the same time.
+  const sync = useCallback(() => {
+    if (!SYNC) return Promise.resolve();
+    clearTimeout(saveTimer.current);
+    saveTimer.current = null;
+    if (running.current) {
+      runAgain.current = true;
+      return running.current;
+    }
+    running.current = (async () => {
+      do {
+        runAgain.current = false;
+        await runSync();
+      } while (runAgain.current);
+      running.current = null;
+    })();
+    return running.current;
+  }, [runSync]);
 
-      // Unsynced local edits win: push them instead of overwriting them.
-      if (!force && localStorage.getItem(KEYS.DIRTY)) {
-        setReady(true);
-        await push();
-        return;
-      }
-
-      const before = dbRef.current;
-      setSyncStatus('syncing');
-      try {
-        const remote = await fetchDataFromGitHub();
-        if (!force && dbRef.current !== before) {
-          // User edited while we were loading – keep their edits.
-          setReady(true);
-          await push();
-          return;
-        }
-        if (remote) {
-          const next = normalizeDb(remote);
-          lastSyncedJson.current = JSON.stringify(next);
-          setDb(next);
-        }
-        setSyncStatus('synced');
-        setLastSyncedAt(new Date());
-      } catch (err) {
-        console.error(err);
-        setSyncStatus('error');
-      }
-      setReady(true);
-    },
-    [push],
-  );
+  // When the app is being closed: try a quick save. It only succeeds if GitHub
+  // still has the version we based our changes on, so it can't overwrite others.
+  // If it fails, the changes stay marked as unsynced and are merged next time.
+  const flushOnHide = useCallback(() => {
+    if (!saveTimer.current || running.current || !shaRef.current) return;
+    clearTimeout(saveTimer.current);
+    saveTimer.current = null;
+    const snapshot = normalizeDb(dbRef.current);
+    saveDataToGitHub(snapshot, { sha: shaRef.current, keepalive: true })
+      .then((sha) => {
+        shaRef.current = sha;
+        setBase(snapshot);
+        if (JSON.stringify(dbRef.current) === baseJson.current) localStorage.removeItem(KEYS.DIRTY);
+      })
+      .catch((err) => console.warn('Save on close skipped, will merge on next sync', err));
+  }, [setBase]);
 
   // Initial load + refresh when returning to the app, flush when leaving it.
   useEffect(() => {
     if (!SYNC) return;
-    pull();
+    sync();
     const onVisibility = () => {
       if (document.visibilityState === 'hidden') {
-        if (saveTimer.current) push({ keepalive: true });
-      } else if (Date.now() - lastPull.current > PULL_THROTTLE) {
-        pull();
+        flushOnHide();
+      } else if (Date.now() - lastPull.current > PULL_THROTTLE || hasLocalChanges(dbRef.current)) {
+        sync();
       }
     };
     document.addEventListener('visibilitychange', onVisibility);
     return () => document.removeEventListener('visibilitychange', onVisibility);
-  }, [pull, push]);
+  }, [sync, flushOnHide, hasLocalChanges]);
 
-  // Persist locally on every change; schedule a debounced GitHub save.
+  // Persist locally on every change; schedule a debounced GitHub sync.
   useEffect(() => {
     dbRef.current = db;
     try {
@@ -195,11 +242,14 @@ export function useAppData() {
       console.error('localStorage error', err);
     }
     if (!SYNC || !ready) return;
-    if (JSON.stringify(db) === lastSyncedJson.current) return;
+    if (JSON.stringify(db) === baseJson.current) {
+      localStorage.removeItem(KEYS.DIRTY);
+      return;
+    }
     localStorage.setItem(KEYS.DIRTY, '1');
     clearTimeout(saveTimer.current);
-    saveTimer.current = setTimeout(() => push(), SAVE_DELAY);
-  }, [db, ready, push]);
+    saveTimer.current = setTimeout(() => sync(), SAVE_DELAY);
+  }, [db, ready, sync]);
 
   // ---- Mutations ------------------------------------------------------------
   const togglePresence = useCallback((dateKey, id) => {
@@ -279,8 +329,6 @@ export function useAppData() {
   }, []);
 
   const replaceAll = useCallback((data) => setDb(normalizeDb(data)), []);
-
-  const sync = useCallback(() => pull(), [pull]);
 
   return {
     db,
